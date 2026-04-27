@@ -1,7 +1,7 @@
 ﻿using Distance.Overheatmeter.Enums;
 using HarmonyLib;
 
-namespace Distance.Overheatmeter.Harmony
+namespace Distance.Overheatmeter.Patches
 {
 	[HarmonyPatch(typeof(TrickyTextLogic), "Update")]
 	internal static class TrickyTextLogic__Update
@@ -9,7 +9,7 @@ namespace Distance.Overheatmeter.Harmony
 		[HarmonyPostfix]
 		internal static void Postfix(TrickyTextLogic __instance)
 		{
-			if (Mod.Instance.DisplayCondition && Mod.Instance.Config.DisplayMode == DisplayMode.Hud)
+			if (Mod.Instance.DisplayCondition && Mod.DisplayModeConfig.Value == DisplayMode.Hud)
 			{
 				__instance.SetAlpha(1);
 				__instance.textMesh_.text = Mod.Instance.Text;

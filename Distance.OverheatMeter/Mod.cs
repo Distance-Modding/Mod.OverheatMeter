@@ -1,12 +1,8 @@
-﻿using Centrifuge.Distance.Game;
-using Centrifuge.Distance.GUI.Controls;
-using Centrifuge.Distance.GUI.Data;
+﻿using BepInEx;
+using BepInEx.Configuration;
+using BepInEx.Logging;
 using Distance.Overheatmeter.Enums;
-using Reactor.API.Attributes;
-using Reactor.API.Input;
-using Reactor.API.Interfaces.Systems;
-using Reactor.API.Logging;
-using Reactor.API.Runtime.Patching;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -14,63 +10,58 @@ using UnityEngine;
 
 namespace Distance.Overheatmeter
 {
-	[ModEntryPoint("com.github.Seeker14491/Heat")]
-	public class Mod : MonoBehaviour
+	//"com.github.Seeker14491/Heat"
+	//Authors: vddCore + Seekr + pigpenguin
+	[BepInPlugin(modGUID, modName, modVersion)]
+	public sealed class Mod : BaseUnityPlugin
 	{
-		public static Mod Instance;
+		//Mod Details
+		private const string modGUID = "Distance.OverheatMeter";
+		private const string modName = "Overheat Meter";
+		private const string modVersion = "1.0.0";
 
-		public IManager Manager { get; set; }
+		//Config Entries
+		public static ConfigEntry<KeyboardShortcut> ToggleHotkey { get; set; }
+		public static ConfigEntry<ActivationMode> ActivationModeConfig { get; set; }
+		public static ConfigEntry<DisplayMode> DisplayModeConfig { get; set; }
+		public static ConfigEntry<float> WarningThreshold { get; set; }
 
-		public Log Logger { get; set; }
+		//Public Variables
 
-		public ConfigurationLogic Config { get; private set; }
+		//Private Variables
 
-		public void Initialize(IManager manager)
+		//Other
+		private static readonly Harmony harmony = new Harmony(modGUID);
+		public static ManualLogSource Log = new ManualLogSource(modName);
+		public static Mod Instance;	
+
+		void Awake()
 		{
 			DontDestroyOnLoad(this);
-			Instance = this;
-			Manager = manager;
-
 			Flags.SubscribeEvents();
 
-			Logger = LogManager.GetForCurrentAssembly();
-			Config = gameObject.AddComponent<ConfigurationLogic>();
-
-			Config.OnChanged += OnConfigChanged;
-
-			OnConfigChanged(Config);
-
-			CreateSettingsMenu();
-
-			RuntimePatcher.AutoPatch();
-		}
-
-		private void CreateSettingsMenu()
-		{
-			var settingsMenu = new MenuTree("menu.mod.heat", "Heat Display Settings")
+			if (Instance == null)
 			{
-				new InputPrompt(MenuDisplayMode.Both, "setting:toggle_hotkey", "SET TOGGLE HOTKEY")
-				.WithTitle("SET TOGGLE HOTKEY")
-				.WithDefaultValue(() => Config.ToggleHotkey)
-				.WithSubmitAction(x => Config.ToggleHotkey = x),
+				Instance = this;
+			}
 
-				new ListBox<DisplayMode>(MenuDisplayMode.Both, "setting:display_mode", "DISPLAY MODE")
-				.WithEntries(MapEnumToListBox<DisplayMode>())
-				.WithGetter(() => Config.DisplayMode)
-				.WithSetter((x) => Config.DisplayMode = x),
+			Log = BepInEx.Logging.Logger.CreateLogSource(modGUID);
+			Logger.LogInfo("Initializing Overheat Meter...");
 
-				new ListBox<ActivationMode>(MenuDisplayMode.Both, "setting:activation_mode", "ACTIVATION MODE")
-				.WithEntries(MapEnumToListBox<ActivationMode>())
-				.WithGetter(() => Config.ActivationMode)
-				.WithSetter((x) => Config.ActivationMode = x),
+			//Config Setup
+			ToggleHotkey = Config.Bind("General", "SET TOGGLE HOTKEY", new KeyboardShortcut(KeyCode.H, new KeyCode[] { KeyCode.LeftControl }),
+				new ConfigDescription("Set the shortcut to toggle the Overheat Meter UI"));
 
-				new FloatSlider(MenuDisplayMode.Both, "setting:warning_threshold", "WARNING THRESHOLD")
-				.LimitedByRange(0.0f, 1.0f)
-				.WithGetter(() => Config.WarningTreshold)
-				.WithSetter((x) => Config.WarningTreshold = x)
-			};
+			ActivationModeConfig = Config.Bind("General", "ACTIVATION MODE", ActivationMode.Always, new ConfigDescription("Control how the UI activates"));
 
-			Menus.AddNew(MenuDisplayMode.Both, settingsMenu, "HEAT DISPLAY", "Configure the Heat mod.");
+			DisplayModeConfig = Config.Bind("General", "DISPLAY MODE", DisplayMode.Hud, new ConfigDescription("Control how the UI displays"));
+
+			WarningThreshold = Config.Bind("General", "WARNING THRESHOLD", 0.8f, new ConfigDescription("Adjust the warning threshold", new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+			//Apply Patches
+			Logger.LogInfo("Loading...");
+			harmony.PatchAll();
+			Logger.LogInfo("Loaded!");
 		}
 
 		#region Utilities
@@ -105,9 +96,9 @@ namespace Distance.Overheatmeter
 		#endregion
 
 		#region Data
-		public bool DisplayCondition => Config.ActivationMode == ActivationMode.Always ||
-			(Config.ActivationMode == ActivationMode.Warning && Vehicle.HeatLevel >= Config.WarningTreshold) ||
-			(Config.ActivationMode == ActivationMode.Toggle && Toggled);
+		public bool DisplayCondition => ActivationModeConfig.Value == ActivationMode.Always ||
+			(ActivationModeConfig.Value == ActivationMode.Warning && Vehicle.HeatLevel >= WarningThreshold.Value) ||
+			(ActivationModeConfig.Value == ActivationMode.Toggle && Toggled);
 
 		public bool Toggled { get; set; }
 
@@ -115,23 +106,30 @@ namespace Distance.Overheatmeter
 
 		public string GetHeatLevel()
 		{
-			string percent = Mathf.RoundToInt(100 * Mathf.Clamp(Vehicle.HeatLevel, 0, 1)).ToString();
-			while (percent.Length< 3)
+			if (G.Sys.GameManager_.IsModeStarted_)
 			{
-				percent = $"0{percent}";
-			}
+				string percent = Mathf.RoundToInt(100 * Mathf.Clamp(Vehicle.HeatLevel, 0, 1)).ToString();
+				while (percent.Length < 3)
+				{
+					percent = $"0{percent}";
+				}
 
-			return $"{percent} %";
+				return $"{percent} %";
+			}
+			else
+            {
+				return "0%";
+            }
 		}
 
 		private string GetSpeed()
 		{
 			if (G.Sys.GameManager_.IsModeStarted_)
 			{
-				switch (Centrifuge.Distance.Game.Options.General.Units)
+				switch (Options.General.Units)
 				{
 					case Units.Metric:
-						return $"{Mathf.RoundToInt(Vehicle.VelocityKPH)} KM/H";
+						return $"{Mathf.RoundToInt( Vehicle.VelocityKPH)} KM/H";
 					case Units.Imperial:
 						return $"{Mathf.RoundToInt(Vehicle.VelocityMPH)} MPH";
 					default:
@@ -146,9 +144,13 @@ namespace Distance.Overheatmeter
 		#endregion
 
 		#region Settings Changed
-		public void OnConfigChanged(ConfigurationLogic config)
+		public void OnConfigChanged(object sender, EventArgs e)
 		{
-			BindAction(ref _keybindToggle, config.ToggleHotkey, () =>
+			SettingChangedEventArgs settingChangedEventArgs = e as SettingChangedEventArgs;
+
+			if (settingChangedEventArgs == null) return;
+
+			if (sender == ToggleHotkey)
 			{
 				Toggled = !Toggled;
 
@@ -159,22 +161,7 @@ namespace Distance.Overheatmeter
 						trickText.Clear();
 					}
 				}
-			});
-		}
-		#endregion
-
-		#region Key Bindings
-
-		private Hotkey _keybindToggle = null;
-
-		public void BindAction(ref Hotkey unbind, string rebind, Action callback)
-		{
-			if (unbind != null)
-			{
-				Manager.Hotkeys.UnbindHotkey(unbind);
 			}
-
-			unbind = Manager.Hotkeys.BindHotkey(rebind, callback, true);
 		}
 		#endregion
 	}

@@ -1,5 +1,4 @@
-﻿using Centrifuge.Distance;
-using Distance.Overheatmeter.Enums;
+﻿using Distance.Overheatmeter.Enums;
 using System.Collections;
 using UnityEngine;
 
@@ -97,7 +96,7 @@ namespace Distance.Overheatmeter.Scripts
 			}
 		}
 
-		internal bool CanDisplay => Mod.Instance.DisplayCondition && Flags.CanDisplayHudElements && Mod.Instance.Config.DisplayMode == DisplayMode.Watermark;
+		internal bool CanDisplay => Mod.Instance.DisplayCondition && Flags.CanDisplayHudElements && Mod.DisplayModeConfig.Value == DisplayMode.Watermark;
 
 		internal void AdjustPosition()
 		{
@@ -112,12 +111,12 @@ namespace Distance.Overheatmeter.Scripts
 
 			for (float time = 0.0f; time < duration; time += Timex.deltaTime_)
 			{
-				if (!Centrifuge.Distance.Game.Options.General.MenuAnimations)
+				if (!Options.General.MenuAnimations)
 				{
 					break;
 				}
 
-				float value = MathUtil.Map(time, 0, duration, current, target);
+				float value = Utilities.MathUtil.Map(time, 0, duration, current, target);
 				widget.alpha = value;
 
 				yield return null;

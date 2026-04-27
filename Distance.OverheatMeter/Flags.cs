@@ -1,5 +1,4 @@
-﻿using Centrifuge.Distance.Game;
-using Distance.Overheatmeter.Enums;
+﻿using Distance.Overheatmeter.Enums;
 using Events.Game;
 using Events.GameMode;
 using Events.Level;

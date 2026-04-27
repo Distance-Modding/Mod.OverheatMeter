@@ -2,7 +2,7 @@
 using HarmonyLib;
 using System;
 
-namespace Distance.Overheatmeter.Harmony
+namespace Distance.Overheatmeter.Patches
 {
 	[HarmonyPatch(typeof(SpeedrunTimerLogic), "OnEnable")]
 	internal static class SpeedrunTimerLogic__OnEnable
@@ -16,7 +16,7 @@ namespace Distance.Overheatmeter.Harmony
 			}
 			catch (Exception e)
 			{
-				Mod.Instance.Logger.Exception(e);
+				Mod.Log.LogError(e.ToString());
 			}
 		}
 	}
